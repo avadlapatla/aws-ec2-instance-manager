@@ -33,7 +33,7 @@ def get_ec2_instances():
                         instance_name = tag['Value']
                         break
             # Append the instance name and id to the list
-            instances.append(f'{instance_name} ({instance_id})')
+            instances.append(f'{instance_name},{instance_id}')
     # Return the list of instances
     return instances
 
@@ -186,7 +186,7 @@ while True:
         instance_input = user_input.replace(' ', '').replace('(', '').replace(')', '')
         if instance_input in instances:
             # Get the instance id from the user input by splitting it by parentheses and taking the second element 
-            instance_id = user_input.split('(')[1].split(')')[0]
+            instance_id = user_input.split(",")[1]
             # Generate a random available port on the machine between 1024 and 65535 
             local_port = random.randint(1024, 65535)
             # Start a port forwarding session using ssm and get the session id
