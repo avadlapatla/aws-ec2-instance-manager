@@ -2,9 +2,14 @@ import boto3
 import time
 
 
-def get_ec2_instances():
-    ec2 = boto3.resource('ec2')
-    instances = ec2.instances.all()
+def get_instances(filter_text=""):
+    ec2 = boto3.client("ec2")
+    response = ec2.describe_instances()
+    instances = []
+    for reservation in response["Reservations"]:
+        for instance in reservation["Instances"]:
+            if filter_text.lower() in get_instance_name(instance).lower():
+                instances.append(instance)
     return instances
 
 
