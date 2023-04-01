@@ -2,3 +2,4 @@ boto3==1.18.62
 botocore==1.21.62
 textual==0.1.12
 rich==10.12.0
+prompt_toolkit==3.0.20
