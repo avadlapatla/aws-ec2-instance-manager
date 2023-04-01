@@ -91,7 +91,7 @@ def search_instance_name(instance_dict, search):
                 return matching_instances
 
 def start_port_forwarding(instance_id, local_port):
-    cmd = f"aws ssm start-session --target {instance_id} --document-name AWS-StartPortForwardingSession --parameters '{{"portNumber": ["22"], "localPortNumber": ["{local_port}"]}}'"
+    cmd = f"aws ssm start-session --target {instance_id} --document-name AWS-StartPortForwardingSession --parameters '{\"portNumber\": [\"22\"], \"localPortNumber\": [\"{local_port}\"]}'"
     subprocess.run(cmd, shell=True)
 
 async def main():
