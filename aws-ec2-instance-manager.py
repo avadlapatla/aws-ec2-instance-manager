@@ -7,6 +7,7 @@ import threading
 import socket
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.shortcuts import radiolist_dialog
 from tabulate import tabulate
 
 def get_ec2_instances():
@@ -68,26 +69,38 @@ def find_available_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
+def filter_instances(instances, search_term):
+    return [i for i in instances if search_term.lower() in i['InstanceId'].lower()]
 
 def main():
     instances = get_ec2_instances()
-    instances_completer = WordCompleter([i['InstanceId'] for i in instances], ignore_case=True)
 
     while True:
-        action = input("\nChoose an action (list/search/connect/terminate/exit): ").lower()
+        action = input("\nChoose an action (list/connect/terminate/exit): ").lower()
 
         if action == 'list':
             list_sessions()
-        elif action == 'search':
-            search_term = input("Enter search term: ")
-            matching_instances = search_instances(search_term, instances)
-            for instance in matching_instances:
-                print(instance['InstanceId'])
         elif action == 'connect':
-            instance_id = prompt("Enter the Instance ID: ", completer=instances_completer)
-            local_port = find_available_port()
-            print(f"Starting port forwarding session on local port {local_port}...")
-            start_port_forwarding(instance_id, local_port)
+            search_term = input("Enter the search term: ")
+            matching_instances = filter_instances(instances, search_term)
+
+            if not matching_instances:
+                print("No matching instances found.")
+                continue
+
+            instance_choices = [(instance['InstanceId'], instance['InstanceId']) for instance in matching_instances]
+            instance_id = radiolist_dialog(
+                title="Select an Instance",
+                text="Choose the EC2 instance you want to connect to:",
+                values=instance_choices,
+            ).run()
+
+            if instance_id:
+                local_port = find_available_port()
+                print(f"Starting port forwarding session on local port {local_port}...")
+                start_port_forwarding(instance_id, local_port)
+            else:
+                print("No instance selected.")
         elif action == 'terminate':
             session_id = input("Enter the session ID to terminate: ")
             terminate_session(session_id)
