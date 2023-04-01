@@ -1,14 +1,15 @@
-# This is a cli application using python-prompt-toolkit that lists all ec2 instances in the aws account by name and allows user to filter ec2 instance as user starts typing characters as well as select instance using arrow keys. Then allow user to select ec2 instance from the list and establish aws ssm port forwarding session, the application should use a random available port on machine and establish a port forwarding session using aws ssm. the session should auto-renew before expiry and allow the user to list active sessions and terminate them.
-
-# Import required modules
 import boto3
 import random
 import subprocess
-import threading
 import time
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import clear
+
+# Define some constants for document name, port number and region
+DOCUMENT_NAME = 'AWS-StartPortForwardingSession'
+PORT_NUMBER = '22' # The port number on the instance to forward (SSH by default)
+REGION = 'eu-west-1' # The AWS region
 
 # Create boto3 clients for ec2 and ssm
 ec2_client = boto3.client('ec2')
@@ -16,6 +17,7 @@ ssm_client = boto3.client('ssm')
 
 # Define a function to get all ec2 instances by name
 def get_ec2_instances():
+    """Return a list of ec2 instances by name and id."""
     # Get all ec2 instances in the account
     response = ec2_client.describe_instances()
     # Create an empty list to store instance names and ids
@@ -33,23 +35,22 @@ def get_ec2_instances():
                         instance_name = tag['Value']
                         break
             # Append the instance name and id to the list
-            instances.append(f'{instance_name},{instance_id}')
+            instances.append(f'{instance_name} ({instance_id})')
     # Return the list of instances
     return instances
 
 # Define a function to start a port forwarding session using ssm
 def start_port_forwarding(instance_id, local_port):
-    # Create a document name for port forwarding
-    document_name = 'AWS-StartPortForwardingSession'
+    """Start a port forwarding session using ssm and return the session id."""
     # Create a parameter dictionary for port forwarding
     parameters = {
-        'portNumber': ['22'], # The port number on the instance to forward (SSH by default)
-        'localPortNumber': [str(local_port)] # The local port number on your machine to use
+        'portNumber': [PORT_NUMBER],
+        'localPortNumber': [str(local_port)]
     }
     # Start a session using ssm client
     response = ssm_client.start_session(
         Target=instance_id,
-        DocumentName=document_name,
+        DocumentName=DOCUMENT_NAME,
         Parameters=parameters
     )
     # Get the session id from the response
@@ -59,17 +60,16 @@ def start_port_forwarding(instance_id, local_port):
 
 # Define a function to renew a port forwarding session using ssm
 def renew_port_forwarding(session_id):
-    # Create a document name for port forwarding
-    document_name = 'AWS-StartPortForwardingSession'
+    """Send a command using ssm client to renew the session and return the command id."""
     # Create a parameter dictionary for port forwarding
     parameters = {
-        'portNumber': ['22'], # The port number on the instance to forward (SSH by default)
-        'localPortNumber': ['0'] # The local port number on your machine to use (0 means any available port)
+        'portNumber': [PORT_NUMBER],
+        'localPortNumber': ['0'] # 0 means any available port
     }
     # Send a command using ssm client to renew the session
     response = ssm_client.send_command(
         InstanceIds=[session_id],
-        DocumentName=document_name,
+        DocumentName=DOCUMENT_NAME,
         Parameters=parameters,
         TimeoutSeconds=30 # The timeout for the command execution (30 seconds by default)
     )
@@ -80,6 +80,7 @@ def renew_port_forwarding(session_id):
 
 # Define a function to terminate a port forwarding session using ssm
 def terminate_port_forwarding(session_id):
+    """Terminate a session using ssm client and return True if successful, False otherwise."""
     # Terminate a session using ssm client
     response = ssm_client.terminate_session(
         SessionId=session_id
@@ -89,72 +90,49 @@ def terminate_port_forwarding(session_id):
 
 # Define a function to run a subprocess for port forwarding using session manager plugin
 def run_subprocess(session_id, local_port):
+    """Run a subprocess for port forwarding using session manager plugin and wait for it to finish."""
     # Create a command list for subprocess
     command = [
         'session-manager-plugin', # The session manager plugin executable
         session_id, # The session id
-        'us-west-2', # The AWS region
+        REGION, # The AWS region
         'StartSession', # The action
         '', # The target (empty for port forwarding)
         '', # The working directory (empty for port forwarding)
         str(local_port), # The local port number
         'localhost', # The host name
-        '22' # The remote port number (SSH by default)
+        PORT_NUMBER # The remote port number (SSH by default)
     ]
     # Run the subprocess and wait for it to finish
     subprocess.run(command)
 
-# Define a function to create a thread for port forwarding using session manager plugin
-def create_thread(session_id, local_port):
-    # Create a thread object with the run_subprocess function and the session id and local port as arguments
-    thread = threading.Thread(target=run_subprocess, args=(session_id, local_port))
-    # Start the thread
-    thread.start()
-    # Return the thread object
-    return thread
-
-# Define a function to create a timer for renewing port forwarding session using ssm
-def create_timer(session_id):
-    # Create a timer object with the renew_port_forwarding function and the session id as argument
-    # The interval is set to 10 minutes (600 seconds) by default
-    timer = threading.Timer(600, renew_port_forwarding, args=(session_id,))
-    # Start the timer
-    timer.start()
-    # Return the timer object
-    return timer
-
-# Define a function to list all active sessions and threads
-def list_sessions(sessions, threads):
+# Define a function to list all active sessions and local ports
+def list_sessions(sessions):
+    """Print a table of active sessions and local ports."""
     # Print a header for the table
-    print('Active sessions and threads:')
-    print('Session ID\t\t\t\tLocal Port\tThread ID')
+    print('Active sessions and local ports:')
+    print('Session ID\t\t\t\tLocal Port')
     print('-' * 80)
-    # Loop through the sessions and threads dictionaries and print their values
-    for session_id in sessions:
-        local_port = sessions[session_id]
-        thread_id = threads[session_id].ident
-        print(f'{session_id}\t{local_port}\t\t{thread_id}')
+    # Loop through the sessions dictionary and print its values
+    for session_id, local_port in sessions.items():
+        print(f'{session_id}\t{local_port}')
     print('-' * 80)
 
-# Define a function to terminate a session and thread by session id
-def terminate_session(session_id, sessions, threads):
+# Define a function to terminate a session by session id
+def terminate_session(session_id, sessions):
+    """Terminate a session and delete it from the sessions dictionary."""
     # Check if the session id exists in the sessions dictionary
     if session_id in sessions:
-        # Get the local port and thread object from the sessions and threads dictionaries
+        # Get the local port from the sessions dictionary
         local_port = sessions[session_id]
-        thread = threads[session_id]
         # Terminate the port forwarding session using ssm
         result = terminate_port_forwarding(session_id)
         # Check if the termination was successful
         if result:
             # Print a success message
             print(f'Successfully terminated session {session_id} on local port {local_port}')
-            # Delete the session id from the sessions and threads dictionaries
+            # Delete the session id from the sessions dictionary
             del sessions[session_id]
-            del threads[session_id]
-            # Terminate the thread by setting its daemon attribute to True and joining it
-            thread.daemon = True
-            thread.join()
         else:
             # Print an error message
             print(f'Failed to terminate session {session_id}')
@@ -164,12 +142,6 @@ def terminate_session(session_id, sessions, threads):
 
 # Create an empty dictionary to store active sessions and their local ports
 sessions = {}
-
-# Create an empty dictionary to store active threads and their session ids
-threads = {}
-
-# Create an empty dictionary to store active timers and their session ids
-timers = {}
 
 # Get all ec2 instances by name and create a word completer for prompt toolkit
 instances = get_ec2_instances()
@@ -186,36 +158,47 @@ while True:
         instance_input = user_input.replace(' ', '').replace('(', '').replace(')', '')
         if instance_input in instances:
             # Get the instance id from the user input by splitting it by parentheses and taking the second element 
-            instance_id = user_input.split(",")[1]
+            instance_id = user_input.split('(')[1].split(')')[0]
             # Generate a random available port on the machine between 1024 and 65535 
             local_port = random.randint(1024, 65535)
             # Start a port forwarding session using ssm and get the session id
             session_id = start_port_forwarding(instance_id, local_port)
             # Print a success message
             print(f'Successfully started session {session_id} on local port {local_port}')
+            print(f'You can now connect to localhost:{local_port} to access your EC2 instance')
+            print(f'To terminate this session, enter /terminate {session_id}')
             # Store the session id and local port in the sessions dictionary
             sessions[session_id] = local_port
-            # Create a thread for port forwarding using session manager plugin and store it in the threads dictionary
-            thread = create_thread(session_id, local_port)
-            threads[session_id] = thread
-            # Create a timer for renewing port forwarding session using ssm and store it in the timers dictionary
-            timer = create_timer(session_id)
-            timers[session_id] = timer
-        # Check if the user input is a command
+            # Run a subprocess for port forwarding using session manager plugin in the background by adding '&' at the end of the command list
+            command = [
+                'session-manager-plugin', 
+                session_id,
+                REGION,
+                'StartSession',
+                '',
+                '',
+                str(local_port),
+                'localhost',
+                PORT_NUMBER,
+                '&'
+            ]
+            subprocess.run(command)
+
+# Check if the user input is a command
         elif user_input.startswith('/'):
             # Get the command name and argument by splitting the user input by whitespace
-            command_name, command_arg = user_input.split(maxsplit=1)
+            command_name, command_arg = user_input.split(' ', 1)
             # Check if the command name is /list
             if command_name == '/list':
-                # List all active sessions and threads
-                list_sessions(sessions, threads)
+                # List all active sessions and local ports
+                list_sessions(sessions)
             # Check if the command name is /terminate
             elif command_name == '/terminate':
-                # Terminate a session and thread by session id
-                terminate_session(command_arg, sessions, threads)
+                # Terminate a session by session id
+                terminate_session(command_arg, sessions)
             # Check if the command name is /exit
             elif command_name == '/exit':
-                # Exit the loop and the program
+                # Exit the program by breaking the loop
                 break
             # Otherwise, print an error message
             else:
@@ -225,8 +208,8 @@ while True:
             print(f'Invalid input: {user_input}')
         # Wait for the user to press enter before continuing the loop
         input('Press enter to continue...')
-    except (KeyboardInterrupt, EOFError):
-        # Exit the loop and the program if the user presses Ctrl+C or Ctrl+D
+    except KeyboardInterrupt:
+        # Exit the program by breaking the loop if the user presses Ctrl-C
         break
 
 # Print a goodbye message
