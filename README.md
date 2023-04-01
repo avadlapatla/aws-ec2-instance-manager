@@ -1,73 +1,47 @@
-# AWS EC2 Instance Manager
+# EC2 Instance Manager
 
-A command-line interface (CLI) application in Python that helps you manage Amazon EC2 instances in your AWS account. This tool allows you to list running instances, search instances by name, establish port forwarding sessions using AWS SSM, and manage active sessions.
+EC2 Instance Manager is a command-line interface (CLI) application written in Python that allows users to interact with their Amazon EC2 instances. The application lists all running instances in the user's AWS account and enables the user to filter the list by typing characters. The user can interactively select an instance from the list using arrow keys and the Enter button. When an instance is selected, the application establishes a port forwarding session using AWS Systems Manager (SSM).
 
 ## Features
 
-- List all running EC2 instances in the AWS account
-- Search EC2 instances by name with autocompletion
-- Establish a port forwarding session to an EC2 instance using a random available local port
-- List all active SSM sessions
-- Automatically renew sessions before they expire
-- Terminate active SSM sessions
+- List all running EC2 instances
+- Filter instances by typing characters
+- Interactively select instances using arrow keys and the Enter button
+- Establish a port forwarding session with the selected instance using AWS SSM
 
-## Requirements
+## Prerequisites
 
 - Python 3.6 or higher
-- [AWS CLI version 2](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
-- AWS credentials configured (use `aws configure` or the `~/.aws/credentials` file)
-- AWS Systems Manager agent installed on the target EC2 instances
+- An AWS account with running EC2 instances
+- AWS CLI v2 installed and configured
+- AWS SSM Agent installed on the EC2 instances
 
 ## Installation
 
 1. Clone the repository:
 
-```bash
-git clone https://github.com/yourusername/aws-ec2-instance-manager.git
-cd aws-ec2-instance-manager
-```
-
-2. Create a virtual environment (optional):
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-3. Install the required packages:
+2. Install the required Python packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Make the script executable (optional):
-
-```bash
-chmod +x ec2_instance_manager.py
-```
-
 ## Usage
 
-Run the application:
+1. Run the application:
 
 ```bash
-python ec2_instance_manager.py
+python main.py
 ```
 
-Or, if you made the script executable:
+2. The application will display a list of running instances. Type characters to filter the instances.
+3. Use the arrow keys to navigate the list and press Enter to select an instance.
+4. The application will establish a port forwarding session with the selected instance using AWS SSM.
 
-```bash
-./ec2_instance_manager.py
-```
+## Contributing
 
-The application will prompt you to choose an action:
-
-- `list`: List all active SSM sessions
-- `search`: Search for EC2 instances by name
-- `connect`: Establish a port forwarding session to an EC2 instance
-- `terminate`: Terminate an active SSM session
-- `exit`: Exit the application
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for more details.
+[MIT](https://choosealicense.com/licenses/mit/)
