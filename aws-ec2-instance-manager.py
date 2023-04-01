@@ -2,83 +2,101 @@ import asyncio
 import boto3
 import os
 import subprocess
-import shlex
-import socket
+import random
 from textual.app import App
-from textual.widgets import Header, SearchToolbar, Footer, ListBox
+from textual.widgets import Button, ScrollView, Placeholder, TextArea
 from textual import events
-from rich.text import Text
 
-def get_ec2_instances():
-    client = boto3.client('ec2')
-    response = client.describe_instances(
-        Filters=[
-            {
-                'Name': 'instance-state-name',
-                'Values': ['running']
-            }
-        ]
-    )
-    instances = []
-    for reservation in response['Reservations']:
-        instances.extend(reservation['Instances'])
-    return instances
+class AwsApp(App):
 
-def start_port_forwarding(instance_id, local_port):
-    cmd = f'aws ssm start-session --target {instance_id} --document-name AWS-StartPortForwardingSession --parameters \'{{"portNumber": ["22"], "localPortNumber": ["{local_port}"]}}\''
-    subprocess.run(shlex.split(cmd))
+    def __init__(self):
+        super().__init__()
 
-def find_available_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return s.getsockname()[1]
-
-class InstanceListBox(ListBox):
-    def __init__(self, instances):
-        self.instances = instances
-        self.filtered_instances = instances
-        super().__init__(self.get_instance_names())
-
-    def get_instance_names(self):
-        return [Text(instance["InstanceId"]) for instance in self.filtered_instances]
-
-    def filter_instances(self, search_term: str):
-        self.filtered_instances = [
-            i for i in self.instances if search_term.lower() in i["InstanceId"].lower()
-        ]
-        self.update(self.get_instance_names())
-
-class EC2InstanceManager(App):
     async def on_mount(self) -> None:
-        instances = get_ec2_instances()
-        self.instance_list = InstanceListBox(instances)
-        await self.view.dock(Header("EC2 Instance Manager"), edge="top")
-        await self.view.dock(SearchToolbar(name="search"), edge="top")
-        await self.view.dock(Footer("Press ESC to exit"), edge="bottom")
-        await self.view.dock(self.instance_list, edge="left", size=40)
+        await self.view.dock(ScrollView())
 
-    async def on_text_changed(self, event: events.TextChanged) -> None:
-        if event.sender.name == "search":
-            self.instance_list.filter_instances(event.text)
-
-    async def action_select_instance(self):
-        instance_id = self.instance_list.choice
-        if instance_id:
-            local_port = find_available_port()
-            print(f"Starting port forwarding session on local port {local_port}...")
-            start_port_forwarding(instance_id, local_port)
-        else:
-            print("No instance selected.")
+    async def on_ready(self):
+        await self.process_command("list")
 
     async def on_key(self, event: events.Key) -> None:
-        if event.key == "enter":
-            await self.action_select_instance()
-        elif event.key == "escape":
-            await self.quit()
+        if event.key == "p":
+            await self.process_command("prompt")
+        elif event.key == "c":
+            await self.process_command("connect")
+        elif event.key == "l":
+            await self.process_command("list")
         else:
             await super().on_key(event)
 
-if __name__ == "__main__":
-    app = EC2InstanceManager()
-    app.run()
+    async def process_command(self, command: str):
+        if command == "prompt":
+            instance_name = await self.prompt("Enter instance name: ")
+            await self.connect_instance(instance_name)
+        elif command == "connect":
+            instance_name = await self.prompt("Enter instance name: ")
+            await self.connect_instance(instance_name)
+        elif command == "list":
+            instance_dict = get_ec2_instances()
+            instance_names = [instance.tags[0]['Value'] for instance in instance_dict.values()]
+            await self.print_instances(instance_names)
+
+    async def print_instances(self, instance_names):
+        scroll_view = self.view.children[0]
+        content = "\n".join(["- " + name for name in instance_names])
+        await scroll_view.update(Placeholder(content))
+
+    async def connect_instance(self, instance_name):
+        instance_dict = get_ec2_instances()
+        matching_instances = search_instance_name(instance_dict, instance_name)
+        if len(matching_instances) > 0:
+            instance = list(matching_instances.values())[0]
+            local_port = random.randint(1024, 65535)
+            await self.print(f"\nEstablishing a port forwarding session to {instance_name} on local port {local_port}...")
+            start_port_forwarding(instance.instance_id, local_port)
+        else:
+            await self.print("\nNo matching instances found.")
+
+    async def prompt(self, message: str) -> str:
+        input_widget = TextArea()
+        await self.view.dock(input_widget, edge="bottom", size=3)
+        await input_widget.focus()
+        await self.print(message)
+
+        while True:
+            event = await self.await_key()
+            if event.key == "enter":
+                break
+
+        await self.view.remove(input_widget)
+        return input_widget.value
+
+    async def print(self, message: str):
+        scroll_view = self.view.children[0]
+        await scroll_view.update(Placeholder(scroll_view.content.text + "\n" + message))
+
+def get_ec2_instances():
+    ec2 = boto3.resource('ec2')
+    instances = ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+    instance_dict = {}
+    for instance in instances:
+        instance_dict[instance.id] = instance
+    return instance_dict
+
+def search_instance_name(instance_dict, search):
+    matching_instances = {}
+    for instance_id, instance in instance_dict.items():
+        for tag in instance.tags:
+            if tag['Key'] == 'Name' and search.lower() in tag['Value'].lower():
+                matching_instances[instance_id] = instance
+                return matching_instances
+
+def start_port_forwarding(instance_id, local_port):
+    cmd = f"aws ssm start-session --target {instance_id} --document-name AWS-StartPortForwardingSession --parameters '{{"portNumber": ["22"], "localPortNumber": ["{local_port}"]}}'"
+    subprocess.run(cmd, shell=True)
+
+async def main():
+    app = AwsApp()
+    await app.run()
+
+if name == 'main':
+    asyncio.run(main())
