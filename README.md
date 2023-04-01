@@ -1,47 +1,26 @@
-# EC2 Instance Manager
+# AWS SSM Port Forwarding CLI
 
-EC2 Instance Manager is a command-line interface (CLI) application written in Python that allows users to interact with their Amazon EC2 instances. The application lists all running instances in the user's AWS account and enables the user to filter the list by typing characters. The user can interactively select an instance from the list using arrow keys and the Enter button. When an instance is selected, the application establishes a port forwarding session using AWS Systems Manager (SSM).
+This is a CLI application that allows users to list all EC2 instances in their AWS account by name, filter EC2 instances as the user starts typing characters, and establish AWS SSM port forwarding sessions. The application will use a random available port on the machine to establish a port forwarding session using AWS SSM. The session will auto-renew before expiry and allow the user to list active sessions and terminate them.
 
-## Features
-
-- List all running EC2 instances
-- Filter instances by typing characters
-- Interactively select instances using arrow keys and the Enter button
-- Establish a port forwarding session with the selected instance using AWS SSM
-
-## Prerequisites
+## Requirements
 
 - Python 3.6 or higher
-- An AWS account with running EC2 instances
-- AWS CLI v2 installed and configured
-- AWS SSM Agent installed on the EC2 instances
+- AWS CLI
+- AWS SSM plugin for the AWS CLI
+- Python Prompt Toolkit (`pip install prompt-toolkit`)
 
-## Installation
+## Setup
 
-1. Clone the repository:
-
-2. Install the required Python packages:
-
-```bash
-pip install -r requirements.txt
-```
+1. Set up AWS credentials using `aws configure`
+2. Install the AWS SSM plugin for the AWS CLI using `aws configure add-plugin ssm`
+3. Install the required Python packages using `pip install prompt-toolkit boto3 pygments`
+4. Clone the repository using `git clone https://github.com/<username>/<repository>`
+5. Navigate to the directory using `cd <repository>`
 
 ## Usage
 
-1. Run the application:
-
-```bash
-python main.py
-```
-
-2. The application will display a list of running instances. Type characters to filter the instances.
-3. Use the arrow keys to navigate the list and press Enter to select an instance.
-4. The application will establish a port forwarding session with the selected instance using AWS SSM.
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
+2. Filter instances by typing characters
+3. Select an instance from the list
+4. The application will establish a port forwarding session using AWS SSM on a random available port
+5. The session will auto-renew before expiry
+6. List active sessions and terminate them by pressing `Ctrl+C`
