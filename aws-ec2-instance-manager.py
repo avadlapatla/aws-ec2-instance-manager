@@ -4,6 +4,7 @@ import subprocess
 import random
 import shlex
 import threading
+import socket
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 from tabulate import tabulate
@@ -61,6 +62,13 @@ def list_sessions():
     else:
         print("No active sessions found.")
 
+def find_available_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
 def main():
     instances = get_ec2_instances()
     instances_completer = WordCompleter([i['InstanceId'] for i in instances], ignore_case=True)
@@ -77,7 +85,7 @@ def main():
                 print(instance['InstanceId'])
         elif action == 'connect':
             instance_id = prompt("Enter the Instance ID: ", completer=instances_completer)
-            local_port = random.randint(1024, 65535)
+            local_port = find_available_port()
             print(f"Starting port forwarding session on local port {local_port}...")
             start_port_forwarding(instance_id, local_port)
         elif action == 'terminate':
